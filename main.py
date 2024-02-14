@@ -29,7 +29,7 @@ def find_profit_opportunities(data, currency_filter, min_profit_per_item):
     opportunities = []
     for i, store in enumerate(data["Stores"]):
         if store["CurrencyName"] != currency_filter or not store["Enabled"]:
-            print(f"Skipping store {store['Name']} due to currency mismatch or it being disabled.")
+            print(f"Skipping store {store['Name']} due to currency {store["CurrencyName"]} mismatch or it being disabled.")
             continue
         for j, other_store in enumerate(data["Stores"]):
             if i == j or other_store["CurrencyName"] != currency_filter or not other_store["Enabled"]:
@@ -38,6 +38,7 @@ def find_profit_opportunities(data, currency_filter, min_profit_per_item):
             for offer in store.get("AllOffers", []):
                 if offer["Buying"]:  # Skip if the store is buying, not selling
                     continue
+                print(f"Analyzing offers from {store['Name']} to {other_store['Name']}")
                 for other_offer in other_store.get("AllOffers", []):
                     if not other_offer["Buying"]:  # Skip if the other store is selling, not buying
                         continue
@@ -47,9 +48,10 @@ def find_profit_opportunities(data, currency_filter, min_profit_per_item):
                         profit_per_item = sell_price - buy_price
 
                         # Determine the maximum quantity that can be sold, taking into account the seller's limit and buyer's maximum wanted
-                        seller_limit = offer.get("Limit", float('inf'))  # Assume unlimited if not specified
+                        seller_limit = offer.get("Quantity", float('inf'))  # Assume unlimited if not specified
                         buyer_max_wanted = other_offer.get("MaxNumWanted", float('inf'))  # Assume unlimited if not specified
-                        if sell_price == 0:
+                        if sell_price == 0 or other_store["Balance"] == 'Infinity':
+                            print(f"Skipping {offer['ItemName']} due to zero sell price or infinite balance.")
                             max_sell_quantity = 0
                         else:
                             max_affordable_quantity = other_store["Balance"] // sell_price
@@ -70,7 +72,9 @@ def find_profit_opportunities(data, currency_filter, min_profit_per_item):
                             }
                             opportunities.append(opportunity)
                             print(f"Profit opportunity found: Buy {opportunity['ItemName']} from {opportunity['BuyFrom']} at {opportunity['BuyPrice']} and sell to {opportunity['SellTo']} at {opportunity['SellPrice']}. Profit per item: {opportunity['ProfitPerItem']}. Potential quantity: {opportunity['PotentialQuantity']}, Total potential profit: {opportunity['TotalPotentialProfit']}.")
-
+                        else:
+                            print(f"Skipping {offer['ItemName']} due to insufficient profit, quantity or balance.")
+                            print(f"Buy price: {buy_price}, Sell price: {sell_price}, Profit per item: {profit_per_item}, Max sell quantity: {max_sell_quantity}, Total potential profit: {total_potential_profit}")
     if not opportunities:
         print("No opportunities found after analysis.")
     else:
