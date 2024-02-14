@@ -99,23 +99,58 @@ def generate_profit_table_from_json(json_file):
 
     # Return the sorted DataFrame
     return df_sorted
+
+def load_opportunities_from_json(filename='profit_opportunities.json'):
+    try:
+        with open(filename, 'r') as file:
+            return json.load(file)
+    except (FileNotFoundError, json.JSONDecodeError):
+        print("No previous opportunities found or file is empty.")
+        return []
+
+def compare_opportunities(prev_opportunities, new_opportunities):
+    prev_items = {(op['BuyFrom'], op['SellTo'], op['ItemName']): op for op in prev_opportunities}
+    new_items = {(op['BuyFrom'], op['SellTo'], op['ItemName']): op for op in new_opportunities}
+
+    appeared = [op for key, op in new_items.items() if key not in prev_items]
+    gone = [op for key, op in prev_items.items() if key not in new_items]
+    increased = []
+
+    for key in new_items.keys() & prev_items.keys():
+        if new_items[key]["TotalPotentialProfit"] > prev_items[key]["TotalPotentialProfit"]:
+            increased.append(new_items[key])
+
+    return appeared, gone, increased
+
+
 if __name__ == "__main__":
     load_dotenv()
     url = os.getenv("URL")
     currency_filter = os.getenv("CURRENCY_FILTER")
     min_profit_per_item = float(os.getenv("MIN_PROFIT_PER_ITEM", 0.01))
 
-    if __name__ == "__main__":
-        print(f"URL: {url}")
-        print(f"Currency Filter: {currency_filter}")
-        print(f"Minimum Profit Per Item: {min_profit_per_item}")
+    prev_opportunities = load_opportunities_from_json()
     data = fetch_data(url)
-    opportunities = find_profit_opportunities(data, currency_filter, min_profit_per_item)
-    if opportunities:
-        for opp in opportunities:
-            print(f"Buy {opp['ItemName']} from {opp['BuyFrom']} at {opp['BuyPrice']} and sell to {opp['SellTo']} at {opp['SellPrice']} for a profit of {opp['ProfitPerItem']} per item. Potential quantity: {opp['PotentialQuantity']}.")
-    else:
-        print("No profit opportunities found.")
-    json_file = 'profit_opportunities.json'
-    profit_table = generate_profit_table_from_json(json_file)
+    new_opportunities = find_profit_opportunities(data, currency_filter, min_profit_per_item)
+
+    appeared, gone, increased = compare_opportunities(prev_opportunities, new_opportunities)
+
+    if appeared:
+        print(f"New opportunities found: {len(appeared)}")
+        for op in appeared:
+            print(f"New: Buy {op['ItemName']} from {op['BuyFrom']} at {op['BuyPrice']} and sell to {op['SellTo']} at {op['SellPrice']}")
+
+    if gone:
+        print(f"Opportunities gone: {len(gone)}")
+        for op in gone:
+            print(f"Gone: {op['ItemName']} from {op['BuyFrom']} to {op['SellTo']}")
+
+    if increased:
+        print(f"Opportunities with increased value: {len(increased)}")
+        for op in increased:
+            print(f"Increased: Buy {op['ItemName']} from {op['BuyFrom']} at {op['BuyPrice']} and sell to {op['SellTo']} at {op['SellPrice']} with increased profit")
+
+    # Finally, save the current opportunities for next comparison
+    save_opportunities_to_json(new_opportunities)
+    profit_table = generate_profit_table_from_json('profit_opportunities.json')
     print(profit_table)
